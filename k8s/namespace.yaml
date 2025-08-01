@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: amazon-scraper
+  labels:
+    name: amazon-scraper
+    app: amazon-scraper
+    environment: production
+  annotations:
+    description: "Namespace for Amazon product scraper application"

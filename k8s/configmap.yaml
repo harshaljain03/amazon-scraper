@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scraper-config
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: config
+data:
+  # Application configuration
+  SEARCH_QUERIES: "wireless headphones,laptop backpack,coffee maker,fitness tracker,bluetooth speakers"
+  MAX_PAGES_PER_QUERY: "3"
+  DELAY_BETWEEN_REQUESTS: "2.0"
+  
+  # Rate limiting
+  RATE_LIMIT_MAX_REQUESTS: "5"
+  RATE_LIMIT_TIME_WINDOW: "60"
+  
+  # Playwright configuration
+  PLAYWRIGHT_HEADLESS: "true"
+  PLAYWRIGHT_TIMEOUT: "30000"
+  PLAYWRIGHT_BROWSER: "chromium"
+  
+  # Monitoring
+  METRICS_HOST: "0.0.0.0"
+  METRICS_PORT: "8080"
+  LOG_LEVEL: "INFO"
+  
+  # Scheduler
+  MAX_CONCURRENT_JOBS: "1"
+  JOB_TIMEOUT: "3600"
+  
+  # Health check settings
+  HEALTH_CHECK_INTERVAL: "30"
+  HEALTH_CHECK_TIMEOUT: "10"
+  
+  # Proxy settings
+  PROXY_ROTATION_INTERVAL: "300"
+  BLOCK_RATE_THRESHOLD: "0.3"
+  
+  # Application settings
+  PYTHONUNBUFFERED: "1"
+  PYTHONPATH: "/app"
+  
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logging-config
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: config
+data:
+  logging.yaml: |
+    version: 1
+    disable_existing_loggers: false
+
+    formatters:
+      json:
+        format: '{"timestamp": "%(asctime)s", "logger": "%(name)s", "level": "%(levelname)s", "message": "%(message)s", "module": "%(module)s"}'
+        datefmt: '%Y-%m-%dT%H:%M:%S'
+      
+      standard:
+        format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        datefmt: '%Y-%m-%d %H:%M:%S'
+
+    handlers:
+      console:
+        class: logging.StreamHandler
+        level: INFO
+        formatter: json
+        stream: ext://sys.stdout
+
+    loggers:
+      crawler:
+        level: DEBUG
+        handlers: [console]
+        propagate: false
+        
+      monitoring:
+        level: INFO
+        handlers: [console]
+        propagate: false
+        
+      storage:
+        level: INFO
+        handlers: [console]
+        propagate: false
+
+    root:
+      level: INFO
+      handlers: [console]

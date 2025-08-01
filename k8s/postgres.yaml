@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: amazon-scraper
+      component: database
+  template:
+    metadata:
+      labels:
+        app: amazon-scraper
+        component: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15
+        env:
+        - name: POSTGRES_DB
+          value: amazon_scraper
+        - name: POSTGRES_USER
+          value: scraper_user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: scraper-secrets
+              key: DATABASE_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        ports:
+        - containerPort: 5432
+          name: postgres
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: init-script
+          mountPath: /docker-entrypoint-initdb.d/init.sql
+          subPath: init.sql
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - scraper_user
+            - -d
+            - amazon_scraper
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - scraper_user
+            - -d
+            - amazon_scraper
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+      - name: init-script
+        configMap:
+          name: postgres-init-script
+          
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: database
+spec:
+  selector:
+    app: amazon-scraper
+    component: database
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+      
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-script
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: database
+data:
+  init.sql: |
+    -- Initialize Amazon Scraper Database
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+    
+    -- Create additional databases
+    CREATE DATABASE amazon_scraper_test;
+    
+    -- Grant permissions
+    GRANT ALL PRIVILEGES ON DATABASE amazon_scraper TO scraper_user;
+    GRANT ALL PRIVILEGES ON DATABASE amazon_scraper_test TO scraper_user;
+    
+    -- Performance settings
+    ALTER DATABASE amazon_scraper SET timezone = 'UTC';

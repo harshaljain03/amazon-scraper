@@ -1,0 +1,194 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: amazon-scraper-deployment
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: scraper
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: amazon-scraper
+      component: scraper
+  template:
+    metadata:
+      labels:
+        app: amazon-scraper
+        component: scraper
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: scraper-service-account
+      containers:
+      - name: scraper
+        image: amazon-scraper:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        envFrom:
+        - configMapRef:
+            name: scraper-config
+        - secretRef:
+            name: scraper-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: data-volume
+          mountPath: /app/data
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        - name: logging-config
+          mountPath: /app/config/logging.yaml
+          subPath: logging.yaml
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "sleep 15"  # Graceful shutdown delay
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: scraper-data-pvc
+      - name: logs-volume
+        emptyDir: {}
+      - name: config-volume
+        configMap:
+          name: proxy-config
+      - name: logging-config
+        configMap:
+          name: logging-config
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scraper-service-account
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: scraper-role
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+rules:
+- apiGroups: [""]
+  resources: ["pods", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scraper-role-binding
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+subjects:
+- kind: ServiceAccount
+  name: scraper-service-account
+  namespace: amazon-scraper
+roleRef:
+  kind: Role
+  name: scraper-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scraper-data-pvc
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: scraper
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxy-config
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: config
+data:
+  proxies.json: |
+    {
+      "proxies": [
+        {
+          "http": "http://proxy1.example.com:8080",
+          "https": "http://proxy1.example.com:8080",
+          "country": "US",
+          "provider": "ProxyProvider1"
+        },
+        {
+          "http": "http://proxy2.example.com:8080",
+          "https": "http://proxy2.example.com:8080",
+          "country": "UK",
+          "provider": "ProxyProvider1"
+        }
+      ]
+    }

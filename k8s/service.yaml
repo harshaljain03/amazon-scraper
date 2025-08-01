@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: amazon-scraper-service
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: scraper
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: amazon-scraper
+    component: scraper
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: amazon-scraper-external
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: scraper-external
+spec:
+  selector:
+    app: amazon-scraper
+    component: scraper
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+    nodePort: 30080
+  type: NodePort
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: amazon-scraper-ingress
+  namespace: amazon-scraper
+  labels:
+    app: amazon-scraper
+    component: ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: scraper.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: amazon-scraper-service
+            port:
+              number: 8080
+  - host: scraper-metrics.yourdomain.com
+    http:
+      paths:
+      - path: /metrics
+        pathType: Exact
+        backend:
+          service:
+            name: amazon-scraper-service
+            port:
+              number: 8080
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: amazon-scraper-service
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - scraper.yourdomain.com
+    - scraper-metrics.yourdomain.com
+    secretName: scraper-tls-secret
