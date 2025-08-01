@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'amazon-scraper'
+    static_configs:
+      - targets: ['172.19.0.1:8000']  # Use this for Docker Desktop
+      # OR use: ['172.17.0.1:8000']            # Docker default gateway IP
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+    scheme: 'http'
