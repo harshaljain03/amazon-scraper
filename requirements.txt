@@ -1,9 +1,0 @@
-playwright
-requests
-beautifulsoup4
-psycopg2-binary
-redis
-sqlalchemy
-python-dotenv
-prometheus-client
-APScheduler
