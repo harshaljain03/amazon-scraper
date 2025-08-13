@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: always
+    env_file: .env
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  scraper:
+    build: ./scraper
+    container_name: scraper
+    restart: always
+    env_file: .env
+    depends_on:
+      - postgres
+    ports:
+      - "${SCRAPER_PORT}:8000"
+    volumes:
+      - ./scraper:/app
+
+volumes:
+  postgres_data:
